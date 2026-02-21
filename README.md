@@ -13,8 +13,11 @@ TR SS Auto Downloader, TR SS Community'deki Toolları hızlıca indirmeye yaraya
 ### Çalıştırma
 PowerShell'i yönetici açıp şu komutu girerek çalıştırabilirsiniz:
 ```powershell
-powershell Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass && powershell Invoke-Expression (Invoke-RestMethod "https://github.com/korkusuzadX/TR SS AutoDownloader/raw/refs/heads/main/TR_SS_Auto_Downloader.ps1")
+$script = Invoke-RestMethod "https://raw.githubusercontent.com/korkusuzadX/TR-SS-AutoDownloader/main/TR_SS_Auto_Downloader.ps1"
+$script = $script.TrimStart([char]0xFEFF)
+Invoke-Expression $script
 ```
+böyle olmasının sebebi UTF-8 ile UTF-8 BOM arası fark Türkçe karakter desteği olması
 
 ### indirerek
 PowerShell'i yönetici açıp şu komutu girerek çalıştırabilirsiniz:

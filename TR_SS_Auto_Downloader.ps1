@@ -1,4 +1,4 @@
-﻿Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 Add-Type @"
@@ -103,15 +103,23 @@ $tr = @{
     Indiriliyor  = ([char]0x0130) + "ndiriliyor"
 }
 
+function Invoke-ScriptInWindow {
+    param([string]$Url)
+    $cmd = "`$host.UI.RawUI.WindowSize = New-Object System.Management.Automation.Host.Size(95,25); " +
+           "`$host.UI.RawUI.BufferSize = New-Object System.Management.Automation.Host.Size(95,200); " +
+           "iex (irm '$Url')"
+    Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $cmd -Verb RunAs
+}
+
 function Show-ScriptSelector {
     param([array]$Scripts)
 
     $sForm = New-Object System.Windows.Forms.Form
-    $sForm.Size = New-Object System.Drawing.Size(500, 420)
+    $sForm.Size = New-Object System.Drawing.Size(500, 474)
     $sForm.StartPosition = "CenterScreen"
     $sForm.FormBorderStyle = "None"
     $sForm.BackColor = [System.Drawing.Color]::FromArgb(16, 16, 22)
-    $sForm.TopMost = $true
+    $sForm.TopMost = $false
 
     $sForm.Add_Paint({
         param($s, $e)
@@ -156,7 +164,7 @@ function Show-ScriptSelector {
     $sCloseLbl.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 12)
     $sCloseLbl.ForeColor = [System.Drawing.Color]::FromArgb(155, 135, 180)
     $sCloseLbl.TextAlign = "MiddleCenter"
-    $sCloseLbl.BackColor = [System.Drawing.Color]::FromArgb(28, 26, 44)
+    $sCloseLbl.BackColor = [System.Drawing.Color]::Transparent
     $sCloseBtn.Controls.Add($sCloseLbl)
 
     $sCloseBtn.Add_Paint({
@@ -164,24 +172,136 @@ function Show-ScriptSelector {
         $g = $e.Graphics
         $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
         if ($s.Tag) {
-            $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(50, 210, 60, 80))
+            $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(60, 200, 50, 70))
             $g.FillRectangle($brush, $s.ClientRectangle)
             $brush.Dispose()
+            $overlayBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(35, 255, 180, 190))
+            $g.FillRectangle($overlayBrush, $s.ClientRectangle)
+            $overlayBrush.Dispose()
+            $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(90, 255, 100, 120), 1)
+            $g.DrawRectangle($pen, 0, 0, $s.Width-1, $s.Height-1)
+            $pen.Dispose()
         } else {
             $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(28, 26, 44))
             $g.FillRectangle($brush, $s.ClientRectangle)
             $brush.Dispose()
         }
     })
-    $sCloseBtn.Add_MouseEnter({ $this.Tag = $true;  $this.Invalidate(); foreach($c in $this.Controls){ $c.ForeColor = [System.Drawing.Color]::White } })
-    $sCloseBtn.Add_MouseLeave({ $this.Tag = $false; $this.Invalidate(); foreach($c in $this.Controls){ $c.ForeColor = [System.Drawing.Color]::FromArgb(155,135,180) } })
+    $sCloseBtn.Add_MouseEnter({ $this.Tag = $true;  $this.Invalidate(); foreach($c in $this.Controls){ $c.ForeColor = [System.Drawing.Color]::White; $c.BackColor = [System.Drawing.Color]::Transparent } })
+    $sCloseBtn.Add_MouseLeave({ $this.Tag = $false; $this.Invalidate(); foreach($c in $this.Controls){ $c.ForeColor = [System.Drawing.Color]::FromArgb(155,135,180); $c.BackColor = [System.Drawing.Color]::Transparent } })
+    $sCloseLbl.Add_MouseEnter({ $this.Parent.Tag = $true;  $this.Parent.Invalidate(); $this.ForeColor = [System.Drawing.Color]::White; $this.BackColor = [System.Drawing.Color]::Transparent })
+    $sCloseLbl.Add_MouseLeave({ $this.Parent.Tag = $false; $this.Parent.Invalidate(); $this.ForeColor = [System.Drawing.Color]::FromArgb(155,135,180); $this.BackColor = [System.Drawing.Color]::Transparent })
     $sCloseBtn.Add_Click({ $sForm.Close() })
     $sCloseLbl.Add_Click({ $sForm.Close() })
     $sHeader.Controls.Add($sCloseBtn)
 
+    $yazarlar = @()
+    foreach ($scr in $Scripts) {
+        $y = if ($scr.Yazar) { $scr.Yazar } else { "Anonim" }
+        if ($yazarlar -notcontains $y) { $yazarlar += $y }
+    }
+    $script:activeTabYazar = if ($yazarlar.Count -gt 0) { $yazarlar[0] } else { "Anonim" }
+
+    $tabBarContainer = New-Object System.Windows.Forms.Panel
+    $tabBarContainer.Location = New-Object System.Drawing.Point(16, 44)
+    $tabBarContainer.Size = New-Object System.Drawing.Size(468, 44)
+    $tabBarContainer.BackColor = [System.Drawing.Color]::FromArgb(16, 16, 22)
+    $sForm.Controls.Add($tabBarContainer)
+
+    $tabBar = New-Object System.Windows.Forms.FlowLayoutPanel
+    $tabBar.Dock = "Fill"
+    $tabBar.BackColor = [System.Drawing.Color]::FromArgb(16, 16, 22)
+    $tabBar.WrapContents = $false
+    $tabBar.AutoScroll = $true
+    $tabBarContainer.Controls.Add($tabBar)
+    
+    $tabBarContainer.Add_MouseDown($dragHandler)
+    $tabBar.Add_MouseDown($dragHandler)
+
+    $tabButtons = @()
+    $sGraphics = $sForm.CreateGraphics()
+    foreach ($yazar in $yazarlar) {
+        $tBtn = New-Object System.Windows.Forms.Panel
+        $tBtn.Height = 44
+        $tBtn.Cursor = "Hand"
+        $tBtn.Tag = @{ Yazar = $yazar; Hovered = $false }
+        
+        $tLbl = New-Object System.Windows.Forms.Label
+        $tLbl.Text = $yazar
+        $tLbl.AutoSize = $true
+        $tLbl.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
+        $tLbl.ForeColor = [System.Drawing.Color]::FromArgb(155, 135, 180)
+        $tLbl.BackColor = [System.Drawing.Color]::Transparent
+        $tBtn.Controls.Add($tLbl)
+        
+        $sz = $sGraphics.MeasureString($yazar, $tLbl.Font)
+        $tBtn.Width = [int]$sz.Width + 30
+        $tBtn.Height = 36
+        $tLbl.Location = New-Object System.Drawing.Point(15, ([int](36 - $sz.Height)/2))
+        $tBtn.Margin = New-Object System.Windows.Forms.Padding(0, 4, 8, 4)
+        
+        $tBtn.Add_Paint({
+            param($s, $e)
+            $g = $e.Graphics
+            $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            $isAktif = ($script:activeTabYazar -eq $s.Tag.Yazar)
+            
+            $clr = if ($s.Tag.Hovered -or $isAktif) { [System.Drawing.Color]::FromArgb(45, 38, 72) } else { [System.Drawing.Color]::FromArgb(30, 28, 48) }
+            $brush = New-Object System.Drawing.SolidBrush($clr)
+            $g.FillRectangle($brush, $s.ClientRectangle)
+            $brush.Dispose()
+            
+            if ($s.Tag.Hovered -or $isAktif) {
+                $overlayBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(25, 180, 140, 255))
+                $g.FillRectangle($overlayBrush, $s.ClientRectangle)
+                $overlayBrush.Dispose()
+            }
+            
+            $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(40, 130, 80, 200), 1)
+            $g.DrawRectangle($pen, 0, 0, $s.Width - 1, $s.Height - 1)
+            $pen.Dispose()
+            
+            if ($isAktif) {
+                $lineBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(130, 75, 210))
+                $g.FillRectangle($lineBrush, 0, $s.Height - 3, $s.Width, 3)
+                $lineBrush.Dispose()
+                $s.Controls[0].ForeColor = [System.Drawing.Color]::FromArgb(210, 180, 255)
+            } else {
+                $s.Controls[0].ForeColor = if ($s.Tag.Hovered) { [System.Drawing.Color]::FromArgb(190, 160, 230) } else { [System.Drawing.Color]::FromArgb(155, 135, 180) }
+            }
+        })
+        
+        $tBtn.Add_MouseEnter({ $this.Tag.Hovered = $true; $this.Invalidate(); foreach($c in $this.Controls){ $c.BackColor = [System.Drawing.Color]::Transparent; $c.Invalidate() } })
+        $tBtn.Add_MouseLeave({ $this.Tag.Hovered = $false; $this.Invalidate(); foreach($c in $this.Controls){ $c.BackColor = [System.Drawing.Color]::Transparent; $c.Invalidate() } })
+        $tLbl.Add_MouseEnter({ $this.Parent.Tag.Hovered = $true; $this.Parent.Invalidate(); $this.BackColor = [System.Drawing.Color]::Transparent; $this.Invalidate() })
+        $tLbl.Add_MouseLeave({ $this.Parent.Tag.Hovered = $false; $this.Parent.Invalidate(); $this.BackColor = [System.Drawing.Color]::Transparent; $this.Invalidate() })
+        
+        $tabClick = {
+            $p = if ($this -is [System.Windows.Forms.Panel]) { $this } else { $this.Parent }
+            if ($script:activeTabYazar -ne $p.Tag.Yazar) {
+                $script:activeTabYazar = $p.Tag.Yazar
+                foreach ($tb in $tabButtons) { $tb.Invalidate() }
+                & $loadScriptsForTab
+            }
+        }
+        $tBtn.Add_Click($tabClick)
+        $tLbl.Add_Click($tabClick)
+        
+        $tabBar.Controls.Add($tBtn)
+        Set-Rounded $tBtn 6
+        $tabButtons += $tBtn
+    }
+    $sGraphics.Dispose()
+
+    $tabSeparator = New-Object System.Windows.Forms.Panel
+    $tabSeparator.Location = New-Object System.Drawing.Point(16, 88)
+    $tabSeparator.Size = New-Object System.Drawing.Size(468, 1)
+    $tabSeparator.BackColor = [System.Drawing.Color]::FromArgb(60, 200, 200, 220)
+    $sForm.Controls.Add($tabSeparator)
+
     $contentArea = New-Object System.Windows.Forms.Panel
-    $contentArea.Location = New-Object System.Drawing.Point(0, 44)
-    $contentArea.Size = New-Object System.Drawing.Size(500, 290)
+    $contentArea.Location = New-Object System.Drawing.Point(0, 89)
+    $contentArea.Size = New-Object System.Drawing.Size(500, 289)
     $contentArea.BackColor = [System.Drawing.Color]::FromArgb(16, 16, 22)
     $sForm.Controls.Add($contentArea)
 
@@ -202,8 +322,8 @@ function Show-ScriptSelector {
         param($s, $e)
         $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
             $s.ClientRectangle,
-            [System.Drawing.Color]::FromArgb(150, 95, 220),
-            [System.Drawing.Color]::FromArgb(90, 50, 160),
+            [System.Drawing.Color]::FromArgb(15, 80, 50),
+            [System.Drawing.Color]::FromArgb(20, 110, 65),
             [System.Drawing.Drawing2D.LinearGradientMode]::Vertical
         )
         $e.Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
@@ -220,27 +340,31 @@ function Show-ScriptSelector {
     $itemsPanel.BackColor = [System.Drawing.Color]::FromArgb(16, 16, 22)
     $contentArea.Controls.Add($itemsPanel)
 
-    $checkboxes = @()
+    $script:checkboxes = @()
     $itemHeight = 44
-    $totalHeight = $Scripts.Count * $itemHeight
+    $script:totalHeight = 0
     $script:scrollOffset = 0
     $visibleHeight = 274
 
     $updateScroll = {
-        $maxScroll = [Math]::Max(0, $totalHeight - $visibleHeight)
+        $maxScroll = [Math]::Max(0, $script:totalHeight - $visibleHeight)
         if ($maxScroll -eq 0) {
             $scrollThumb.Visible = $false
+            foreach ($cb in $script:checkboxes) {
+                $cb.Top = $cb.Tag.OriginalY
+                $cb.Visible = $true
+            }
             return
         }
         $scrollThumb.Visible = $true
-        $thumbRatio = $visibleHeight / $totalHeight
+        $thumbRatio = $visibleHeight / $script:totalHeight
         $thumbH = [Math]::Max(20, [int]($scrollTrack.Height * $thumbRatio))
         $scrollThumb.Height = $thumbH
         $thumbY = [int](($script:scrollOffset / $maxScroll) * ($scrollTrack.Height - $thumbH))
         $scrollThumb.Top = [Math]::Max(0, [Math]::Min($thumbY, $scrollTrack.Height - $thumbH))
         $scrollThumb.Invalidate()
 
-        foreach ($cb in $checkboxes) {
+        foreach ($cb in $script:checkboxes) {
             $cb.Top = $cb.Tag.OriginalY - $script:scrollOffset
             $visible = ($cb.Top + $cb.Height -gt 0) -and ($cb.Top -lt $visibleHeight)
             $cb.Visible = $visible
@@ -249,7 +373,7 @@ function Show-ScriptSelector {
 
     $wheelHandler = {
         param($sender, $e)
-        $maxS = [Math]::Max(0, $totalHeight - $visibleHeight)
+        $maxS = [Math]::Max(0, $script:totalHeight - $visibleHeight)
         if ($maxS -eq 0) { return }
         $delta = if ($e.Delta -gt 0) { -40 } else { 40 }
         $script:scrollOffset = [Math]::Max(0, [Math]::Min($script:scrollOffset + $delta, $maxS))
@@ -259,8 +383,27 @@ function Show-ScriptSelector {
     $contentArea.Add_MouseWheel($wheelHandler)
     $itemsPanel.Add_MouseWheel($wheelHandler)
 
-    $yPos = 0
-    foreach ($scr in $Scripts) {
+    $loadScriptsForTab = {
+        $itemsPanel.SuspendLayout()
+        foreach ($cb in $script:checkboxes) {
+            $cb.Dispose()
+        }
+        $itemsPanel.Controls.Clear()
+        $script:checkboxes = @()
+        $script:scrollOffset = 0
+
+        $filteredScripts = @()
+        foreach ($scr in $Scripts) {
+            $y = if ($scr.Yazar) { $scr.Yazar } else { "Anonim" }
+            if ($y -eq $script:activeTabYazar) {
+                $filteredScripts += $scr
+            }
+        }
+
+        $script:totalHeight = $filteredScripts.Count * $itemHeight
+
+        $yPos = 0
+        foreach ($scr in $filteredScripts) {
         $row = New-Object System.Windows.Forms.Panel
         $row.Size = New-Object System.Drawing.Size(446, 36)
         $row.Location = New-Object System.Drawing.Point(0, $yPos)
@@ -314,13 +457,66 @@ function Show-ScriptSelector {
         $nameLbl = New-Object System.Windows.Forms.Label
         $nameLbl.Text = $scr.Ad
         $nameLbl.Location = New-Object System.Drawing.Point(38, 0)
-        $nameLbl.Size = New-Object System.Drawing.Size(400, 36)
+        $nameLbl.Size = New-Object System.Drawing.Size(310, 36)
         $nameLbl.Font = New-Object System.Drawing.Font("Segoe UI", 9)
         $nameLbl.ForeColor = [System.Drawing.Color]::FromArgb(185, 165, 210)
         $nameLbl.TextAlign = "MiddleLeft"
         $nameLbl.BackColor = [System.Drawing.Color]::Transparent
         $nameLbl.Add_MouseWheel($wheelHandler)
         $row.Controls.Add($nameLbl)
+
+        $runBtn = New-Object System.Windows.Forms.Panel
+        $runBtn.Size = New-Object System.Drawing.Size(80, 22)
+        $runBtn.Location = New-Object System.Drawing.Point(358, 7)
+        $runBtn.Cursor = "Hand"
+        $runBtn.BackColor = [System.Drawing.Color]::FromArgb(25, 60, 40)
+        $runBtn.Tag = @{ Hovered = $false; Url = $scr.Url }
+
+        $runLbl = New-Object System.Windows.Forms.Label
+        $runLbl.Text = "Calistir"
+        $runLbl.Dock = "Fill"
+        $runLbl.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 7.5)
+        $runLbl.ForeColor = [System.Drawing.Color]::FromArgb(120, 220, 150)
+        $runLbl.TextAlign = "MiddleCenter"
+        $runLbl.BackColor = [System.Drawing.Color]::Transparent
+        $runBtn.Controls.Add($runLbl)
+
+        $runBtn.Add_Paint({
+            param($s, $e)
+            $g = $e.Graphics
+            $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            if ($s.Tag.Hovered) {
+                $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+                    $s.ClientRectangle,
+                    [System.Drawing.Color]::FromArgb(15, 80, 50),
+                    [System.Drawing.Color]::FromArgb(20, 110, 65),
+                    [System.Drawing.Drawing2D.LinearGradientMode]::Horizontal
+                )
+                $g.FillRectangle($brush, $s.ClientRectangle)
+                $brush.Dispose()
+                $overlayBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(30, 180, 255, 200))
+                $g.FillRectangle($overlayBrush, $s.ClientRectangle)
+                $overlayBrush.Dispose()
+            } else {
+                $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(25, 60, 40))
+                $g.FillRectangle($brush, $s.ClientRectangle)
+                $brush.Dispose()
+            }
+            $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(60, 80, 200, 120), 1)
+            $g.DrawRectangle($pen, 0, 0, $s.Width-1, $s.Height-1)
+            $pen.Dispose()
+        })
+
+        $runBtn.Add_MouseEnter({ $this.Tag.Hovered = $true;  $this.Invalidate() })
+        $runBtn.Add_MouseLeave({ $this.Tag.Hovered = $false; $this.Invalidate() })
+        $runLbl.Add_MouseEnter({ $this.Parent.Tag.Hovered = $true;  $this.Parent.Invalidate() })
+        $runLbl.Add_MouseLeave({ $this.Parent.Tag.Hovered = $false; $this.Parent.Invalidate() })
+
+        $runBtn.Add_Click({ Invoke-ScriptInWindow -Url $this.Tag.Url })
+        $runLbl.Add_Click({ Invoke-ScriptInWindow -Url $this.Parent.Tag.Url })
+
+        Set-Rounded $runBtn 6
+        $row.Controls.Add($runBtn)
 
         $toggleAction = {
             $r = if ($this -is [System.Windows.Forms.Panel]) { $this } else { $this.Parent }
@@ -334,15 +530,18 @@ function Show-ScriptSelector {
 
         Set-Rounded $row 8
         $itemsPanel.Controls.Add($row)
-        $checkboxes += $row
+        $script:checkboxes += $row
         $yPos += $itemHeight
     }
+        $itemsPanel.ResumeLayout()
+        & $updateScroll
+    }
 
-    & $updateScroll
+    & $loadScriptsForTab
 
     $btnSelectAll = New-Object System.Windows.Forms.Panel
     $btnSelectAll.Size = New-Object System.Drawing.Size(130, 36)
-    $btnSelectAll.Location = New-Object System.Drawing.Point(16, 346)
+    $btnSelectAll.Location = New-Object System.Drawing.Point(16, 390)
     $btnSelectAll.Cursor = "Hand"
     $btnSelectAll.BackColor = [System.Drawing.Color]::FromArgb(30, 28, 48)
     $btnSelectAll.Tag = $false
@@ -358,7 +557,7 @@ function Show-ScriptSelector {
 
     $btnClearAll = New-Object System.Windows.Forms.Panel
     $btnClearAll.Size = New-Object System.Drawing.Size(130, 36)
-    $btnClearAll.Location = New-Object System.Drawing.Point(156, 346)
+    $btnClearAll.Location = New-Object System.Drawing.Point(156, 390)
     $btnClearAll.Cursor = "Hand"
     $btnClearAll.BackColor = [System.Drawing.Color]::FromArgb(30, 28, 48)
     $btnClearAll.Tag = $false
@@ -374,13 +573,13 @@ function Show-ScriptSelector {
 
     $btnRun = New-Object System.Windows.Forms.Panel
     $btnRun.Size = New-Object System.Drawing.Size(150, 36)
-    $btnRun.Location = New-Object System.Drawing.Point(332, 346)
+    $btnRun.Location = New-Object System.Drawing.Point(332, 390)
     $btnRun.Cursor = "Hand"
     $btnRun.BackColor = [System.Drawing.Color]::FromArgb(55, 30, 90)
     $btnRun.Tag = $false
 
     $btnRunLbl = New-Object System.Windows.Forms.Label
-    $btnRunLbl.Text = ([char]0x0130) + "ndir ve " + ([char]0x00C7) + "al" + ([char]0x0131) + ([char]0x015F) + "t" + ([char]0x0131) + "r"
+    $btnRunLbl.Text = ([char]0x0130) + "ndir"
     $btnRunLbl.Dock = "Fill"
     $btnRunLbl.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9)
     $btnRunLbl.ForeColor = [System.Drawing.Color]::FromArgb(210, 170, 255)
@@ -393,16 +592,21 @@ function Show-ScriptSelector {
             param($s, $e)
             $g = $e.Graphics
             $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-            $clr = if ($s.Tag) { [System.Drawing.Color]::FromArgb(50, 45, 75) } else { [System.Drawing.Color]::FromArgb(30, 28, 48) }
+            $clr = if ($s.Tag) { [System.Drawing.Color]::FromArgb(45, 38, 72) } else { [System.Drawing.Color]::FromArgb(30, 28, 48) }
             $brush = New-Object System.Drawing.SolidBrush($clr)
             $g.FillRectangle($brush, $s.ClientRectangle)
             $brush.Dispose()
+            if ($s.Tag) {
+                $overlayBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(25, 180, 140, 255))
+                $g.FillRectangle($overlayBrush, $s.ClientRectangle)
+                $overlayBrush.Dispose()
+            }
             $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(40, 130, 80, 200), 1)
             $g.DrawRectangle($pen, 0, 0, $s.Width-1, $s.Height-1)
             $pen.Dispose()
         })
-        $sb.Add_MouseEnter({ $this.Tag = $true;  $this.Invalidate() })
-        $sb.Add_MouseLeave({ $this.Tag = $false; $this.Invalidate() })
+        $sb.Add_MouseEnter({ $this.Tag = $true;  $this.Invalidate(); foreach($c in $this.Controls){ $c.BackColor = [System.Drawing.Color]::Transparent; $c.Invalidate() } })
+        $sb.Add_MouseLeave({ $this.Tag = $false; $this.Invalidate(); foreach($c in $this.Controls){ $c.BackColor = [System.Drawing.Color]::Transparent; $c.Invalidate() } })
     }
 
     $btnRun.Add_Paint({
@@ -418,6 +622,9 @@ function Show-ScriptSelector {
             )
             $g.FillRectangle($brush, $s.ClientRectangle)
             $brush.Dispose()
+            $overlayBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(30, 200, 160, 255))
+            $g.FillRectangle($overlayBrush, $s.ClientRectangle)
+            $overlayBrush.Dispose()
         } else {
             $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(55, 30, 90))
             $g.FillRectangle($brush, $s.ClientRectangle)
@@ -427,11 +634,11 @@ function Show-ScriptSelector {
         $g.DrawRectangle($pen, 0, 0, $s.Width-1, $s.Height-1)
         $pen.Dispose()
     })
-    $btnRun.Add_MouseEnter({ $this.Tag = $true;  $this.Invalidate() })
-    $btnRun.Add_MouseLeave({ $this.Tag = $false; $this.Invalidate() })
+    $btnRun.Add_MouseEnter({ $this.Tag = $true;  $this.Invalidate(); foreach($c in $this.Controls){ $c.BackColor = [System.Drawing.Color]::Transparent; $c.Invalidate() } })
+    $btnRun.Add_MouseLeave({ $this.Tag = $false; $this.Invalidate(); foreach($c in $this.Controls){ $c.BackColor = [System.Drawing.Color]::Transparent; $c.Invalidate() } })
 
     $selectAllAction = {
-        foreach ($cb in $checkboxes) {
+        foreach ($cb in $script:checkboxes) {
             $cb.Tag.Checked = $true
             $cb.Invalidate()
             $lbl = $cb.Controls | Where-Object { $_ -is [System.Windows.Forms.Label] } | Select-Object -First 1
@@ -439,7 +646,7 @@ function Show-ScriptSelector {
         }
     }
     $clearAllAction = {
-        foreach ($cb in $checkboxes) {
+        foreach ($cb in $script:checkboxes) {
             $cb.Tag.Checked = $false
             $cb.Invalidate()
             $lbl = $cb.Controls | Where-Object { $_ -is [System.Windows.Forms.Label] } | Select-Object -First 1
@@ -448,14 +655,21 @@ function Show-ScriptSelector {
     }
     $runAction = {
         $secilenler = @()
-        foreach ($cb in $checkboxes) {
+        foreach ($cb in $script:checkboxes) {
             if ($cb.Tag.Checked) { $secilenler += $cb.Tag.Script }
         }
         if ($secilenler.Count -eq 0) { return }
         $sForm.Close()
         $target = Join-Path $downloadsPath "ScreenShareTools\PSScripts"
-        Invoke-TaskWithProgress -Title "TR SS Scripts" -Items $secilenler -TargetPath $target -RunAfterDownload $true
+        Invoke-TaskWithProgress -Title "TR SS Scripts" -Items $secilenler -TargetPath $target -RunAfterDownload $false
     }
+
+    $btnSelectAllLbl.Add_MouseEnter({ $this.Parent.Tag = $true;  $this.Parent.Invalidate(); $this.BackColor = [System.Drawing.Color]::Transparent; $this.Invalidate() })
+    $btnSelectAllLbl.Add_MouseLeave({ $this.Parent.Tag = $false; $this.Parent.Invalidate(); $this.BackColor = [System.Drawing.Color]::Transparent; $this.Invalidate() })
+    $btnClearAllLbl.Add_MouseEnter({ $this.Parent.Tag = $true;  $this.Parent.Invalidate(); $this.BackColor = [System.Drawing.Color]::Transparent; $this.Invalidate() })
+    $btnClearAllLbl.Add_MouseLeave({ $this.Parent.Tag = $false; $this.Parent.Invalidate(); $this.BackColor = [System.Drawing.Color]::Transparent; $this.Invalidate() })
+    $btnRunLbl.Add_MouseEnter({ $this.Parent.Tag = $true;  $this.Parent.Invalidate(); $this.BackColor = [System.Drawing.Color]::Transparent; $this.Invalidate() })
+    $btnRunLbl.Add_MouseLeave({ $this.Parent.Tag = $false; $this.Parent.Invalidate(); $this.BackColor = [System.Drawing.Color]::Transparent; $this.Invalidate() })
 
     $btnSelectAll.Add_Click($selectAllAction)
     $btnSelectAllLbl.Add_Click($selectAllAction)
@@ -474,6 +688,7 @@ function Show-ScriptSelector {
         Set-Rounded $btnSelectAll 8
         Set-Rounded $btnClearAll 8
         Set-Rounded $btnRun 8
+        Set-Rounded $sCloseBtn 10
     })
 
     $sForm.ShowDialog() | Out-Null
@@ -552,7 +767,7 @@ function Invoke-TaskWithProgress {
     $pForm.StartPosition = "CenterScreen"
     $pForm.FormBorderStyle = "None"
     $pForm.BackColor = [System.Drawing.Color]::FromArgb(16, 16, 22)
-    $pForm.TopMost = $true
+    $pForm.TopMost = $false 
 
     $pForm.Add_MouseDown({
         [Win32]::ReleaseCapture() | Out-Null
@@ -850,7 +1065,10 @@ function New-WindowButton($iconChar, $hoverColor, $action) {
             $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(50, $hc.R, $hc.G, $hc.B))
             $g.FillRectangle($brush, $s.ClientRectangle)
             $brush.Dispose()
-            $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(70, $hc.R, $hc.G, $hc.B), 1)
+            $overlayBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(35, 255, 220, 255))
+            $g.FillRectangle($overlayBrush, $s.ClientRectangle)
+            $overlayBrush.Dispose()
+            $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(100, $hc.R, $hc.G, $hc.B), 1)
             $g.DrawRectangle($pen, 0, 0, $s.Width - 1, $s.Height - 1)
             $pen.Dispose()
         } else {
@@ -1044,12 +1262,22 @@ $dosyalar = @(
 
 New-PurpleButton "TR SS PowerShell Scripts" 175 {
     $psScripts = @(
-        @{ Url = "https://raw.githubusercontent.com/praiselily/lilith-ps/refs/heads/main/Drive-Executions.ps1"; Ad = "Drive-Executions.ps1" }
-        @{ Url = "https://raw.githubusercontent.com/praiselily/lilith-ps/refs/heads/main/Services.ps1"; Ad = "Services.ps1" }
-        @{ Url = "https://raw.githubusercontent.com/spokwn/powershells/refs/heads/main/Streams.ps1"; Ad = "Streams.ps1" }
-        @{ Url = "https://raw.githubusercontent.com/bacanoicua/Screenshare/main/RedLotusPrefetchIntegrityAnalyzer.ps1"; Ad = "RedLotusPrefetchIntegrityAnalyzer.ps1" }
-        @{ Url = "https://raw.githubusercontent.com/trSScommunity/BaglantiAnalizi/refs/heads/main/BaglantiAnalizi.ps1"; Ad = "BaglantiAnalizi.ps1" }
-        @{ Url = "https://raw.githubusercontent.com/praiselily/lilith-ps/refs/heads/main/DoomsdayFinder.ps1"; Ad = "DoomsdayFinder.ps1" }
+        @{ Url = "https://raw.githubusercontent.com/praiselily/lilith-ps/refs/heads/main/Drive-Executions.ps1"; Ad = "Drive-Executions.ps1"; Yazar = "Lily" }
+        @{ Url = "https://raw.githubusercontent.com/praiselily/lilith-ps/refs/heads/main/Services.ps1"; Ad = "Services.ps1"; Yazar = "Lily" }
+        @{ Url = "https://raw.githubusercontent.com/praiselily/lilith-ps/refs/heads/main/DoomsdayFinder.ps1"; Ad = "DoomsdayFinder.ps1"; Yazar = "Lily" }
+        @{ Url= "https://raw.githubusercontent.com/zedoonvm1/powershell-scripts/refs/heads/main/DoomsDayDetector.ps1"; Ad = "Domdomfinderv2.ps1"; Yazar = "Lily"}
+
+        @{ Url = "https://raw.githubusercontent.com/spokwn/powershells/refs/heads/main/Streams.ps1"; Ad = "Streams.ps1"; Yazar = "spokwn" }
+        @{ Url= "https://raw.githubusercontent.com/spokwn/powershells/refs/heads/main/bamparser.ps1"; Ad = "BamDeletedKeys.ps1"; Yazar = "spokwn"}
+
+        @{ Url = "https://raw.githubusercontent.com/bacanoicua/Screenshare/main/RedLotusPrefetchIntegrityAnalyzer.ps1"; Ad = "RedLotusPrefetchIntegrityAnalyzer.ps1"; Yazar = "RedLotus" }
+        @{ Url= "https://raw.githubusercontent.com/ObsessiveBf/Task-Scheduler-Parser/main/script.ps1"; Ad = "TaskSchedulerParser.ps1"; Yazar = "RedLotus" }
+        @{ Url= "https://raw.githubusercontent.com/HadronCollision/PowershellScripts/refs/heads/main/HabibiModAnalyzer.ps1"; Ad = "HabibiModAnalyzer.ps1"; Yazar = "RedLotus" }
+        @{ Url ="https://raw.githubusercontent.com/nolww/project-mohr/refs/heads/main/SuspiciousScheduler.ps1"; Ad = "SuspiciousScheduler.ps1"; Yazar = "RedLotus"}
+        @{ Url = "https://raw.githubusercontent.com/nolww/project-mohr/refs/heads/main/ManualTasks.ps1"; Ad = "ManualSchduledTasks.ps1"; Yazar = "RedLotus"}
+        @{ Url = "https://raw.githubusercontent.com/PureIntent/ScreenShare/main/RedLotusBam.ps1"; Ad = "RedLotusBam.ps1"; Yazar = "RedLotus"}
+
+        @{ Url = "https://raw.githubusercontent.com/trSScommunity/BaglantiAnalizi/refs/heads/main/BaglantiAnalizi.ps1"; Ad = "BaglantiAnalizi.ps1"; Yazar = "TRSScommunity" }
     )
     Show-ScriptSelector -Scripts $psScripts
 }

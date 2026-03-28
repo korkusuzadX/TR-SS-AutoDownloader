@@ -965,8 +965,8 @@ $header.Add_MouseDown({
     [Win32]::SendMessage($form.Handle, 0xA1, 0x2, 0)
 })
 
-# titlenin glowunun başlangıcı
-# 2 yorum satırı attık hemen yapay zeka demeyin 
+# titlenin glowunun baÅŸlangÄ±cÄ±
+# 2 yorum satÄ±rÄ± attÄ±k hemen yapay zeka demeyin 
 # yapay zeka diyenlerin 
 $script:glowStep = 0
 $script:glowDir  = 1
@@ -1038,7 +1038,7 @@ $header.Controls.Add($title)
 
 $form.Add_Shown({ $glowTimer.Start() })
 $form.Add_FormClosing({ $glowTimer.Stop(); $glowTimer.Dispose() })
-# glow bitiştir
+# glow bitiÅŸtir
 function New-WindowButton($iconChar, $hoverColor, $action) {
     $btn = New-Object System.Windows.Forms.Panel
     $btn.Size = New-Object System.Drawing.Size(50, 34)
@@ -1191,7 +1191,7 @@ function New-PurpleButton($text, $top, $action) {
 $downloadsPath = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
 
 New-PurpleButton "SS Tools" 120 {
-$dosyalar = @(
+    $dosyalar = @(
         @{ Url = "https://www.nirsoft.net/utils/winprefetchview-x64.zip"; Ad = "WinPrefetchView_x64.zip"; Klasor = "NirSoft" }
         @{ Url = "https://www.nirsoft.net/utils/lastactivityview.zip"; Ad = "LastActivityView.zip"; Klasor = "NirSoft" }
         @{ Url = "https://www.nirsoft.net/utils/usbdrivelog.zip"; Ad = "UsbDriveLog.zip"; Klasor = "NirSoft" }
@@ -1219,9 +1219,9 @@ $dosyalar = @(
         @{ Url = "https://github.com/spokwn/Tool/releases/download/v1.1.2/espouken.exe"; Ad = "espouken.exe"; Klasor = "Spokwn" }
         @{ Url = "https://github.com/spokwn/BamDeletedKeys/releases/download/v1.0/BamDeletedKeys.exe"; Ad = "BamDeletedKeys.exe"; Klasor = "Spokwn" }
 
-        @{ Url = "https://github.com/korkusuzadX/TR-SS-AutoDownloader/blob/main/echo%20tools/echo-journal.exe"; Ad = "Journal.exe"; Klasor = "Echo" }
-        @{ Url = "https://github.com/korkusuzadX/TR-SS-AutoDownloader/blob/main/echo%20tools/echo-userassist.exe"; Ad = "UserAssist.exe"; Klasor = "Echo" }
-        @{ Url = "https://github.com/korkusuzadX/TR-SS-AutoDownloader/blob/main/echo%20tools/echo-usb.exe"; Ad = "UsbTool.exe"; Klasor = "Echo" }
+        @{ Url = "https://github.com/korkusuzadX/TR-SS-AutoDownloader/raw/main/echo%20tools/echo-journal.exe"; Ad = "Echo-Journal.exe"; Klasor = "Echo" }
+        @{ Url = "https://github.com/korkusuzadX/TR-SS-AutoDownloader/raw/main/echo%20tools/echo-userassist.exe"; Ad = "UserAssist.exe"; Klasor = "Echo" }
+        @{ Url = "https://github.com/korkusuzadX/TR-SS-AutoDownloader/raw/main/echo%20tools/echo-usb.exe"; Ad = "UsbTool.exe"; Klasor = "Echo" }
 
         @{ Url = "https://github.com/ItzIceHere/RedLotus-Mod-Analyzer/releases/download/RL/RedLotusModAnalyzer.exe"; Ad = "RedLotusModAnalyzer.exe"; Klasor = "RedLotus" }
         @{ Url = "https://github.com/ItzIceHere/RedLotus-Task-Sentinel/releases/download/RL/RedLotusTaskSentinel.exe"; Ad = "RedLotusTaskSentinel.exe"; Klasor = "RedLotus" }
@@ -1234,7 +1234,7 @@ $dosyalar = @(
 
         @{ Url = "https://archive.org/download/access-data-ftk-imager-4.7.1/AccessData_FTK_Imager_4.7.1.exe"; Ad = "FTK_Imager_4.7.1.exe"; Klasor = "Forensics" }
         @{ Url = "https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-aarch64.zip"; Ad = "hayabusa-3.6.0-win-aarch64.zip"; Klasor = "Forensics" }
-        @{ Url = "https://github.com/Velocidex/velociraptor/releases/download/v0.75/velociraptor-v0.75.1-windows-amd64.exe"; Ad = "Velociraptor.exe"; Klasor = "Forensics" }
+        @{ Url = "https://github.com/Velocidex/velociraptor/releases/download/v0.75/velociraptor-v0.75.1-windows-amd64.exe"; Ad = "Velocidace.exe"; Klasor = "Forensics" }
 
         @{ Url = "https://github.com/winsiderss/si-builds/releases/download/3.2.25275.112/systeminformer-build-canary-setup.exe"; Ad = "SystemInformer_Canary_Setup.exe"; Klasor = "SystemTools" }
         @{ Url = "https://www.voidtools.com/Everything-1.4.1.1029.x86-Setup.exe"; Ad = "Everything-Setup.exe"; Klasor = "SystemTools" }
@@ -1253,10 +1253,13 @@ $dosyalar = @(
     )
 
     $target = Join-Path $downloadsPath "ScreenShareTools"
+    
+    if (!(Test-Path $target)) { New-Item -ItemType Directory -Path $target -Force }
+
     Invoke-TaskWithProgress -Title "TR SS Tools indiriliyor..." -Items $dosyalar -TargetPath $target -ActionPerItem {
         param($item, $path)
         $kayitYolu = Join-Path $path $item.Ad
-        Invoke-WebRequest -Uri $item.Url -OutFile $kayitYolu -UseBasicParsing -TimeoutSec 120 -UserAgent "Mozilla/5.0"
+        Invoke-WebRequest -Uri $item.Url -OutFile $kayitYolu -UseBasicParsing -TimeoutSec 120 -UserAgent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -ErrorAction SilentlyContinue
     }
 }
 

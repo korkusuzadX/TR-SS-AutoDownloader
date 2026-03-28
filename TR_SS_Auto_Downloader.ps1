@@ -1219,9 +1219,9 @@ $dosyalar = @(
         @{ Url = "https://github.com/spokwn/Tool/releases/download/v1.1.2/espouken.exe"; Ad = "espouken.exe"; Klasor = "Spokwn" }
         @{ Url = "https://github.com/spokwn/BamDeletedKeys/releases/download/v1.0/BamDeletedKeys.exe"; Ad = "BamDeletedKeys.exe"; Klasor = "Spokwn" }
 
-        @{ Url = "https://dl.echo.ac/tool/journal"; Ad = "Journal.exe"; Klasor = "Echo" }
-        @{ Url = "https://dl.echo.ac/tool/userassist"; Ad = "UserAssist.exe"; Klasor = "Echo" }
-        @{ Url = "https://dl.echo.ac/tool/usb"; Ad = "UsbTool.exe"; Klasor = "Echo" }
+        @{ Url = "https://github.com/korkusuzadX/TR-SS-AutoDownloader/blob/main/echo%20tools/echo-journal.exe"; Ad = "Journal.exe"; Klasor = "Echo" }
+        @{ Url = "https://github.com/korkusuzadX/TR-SS-AutoDownloader/blob/main/echo%20tools/echo-userassist.exe"; Ad = "UserAssist.exe"; Klasor = "Echo" }
+        @{ Url = "https://github.com/korkusuzadX/TR-SS-AutoDownloader/blob/main/echo%20tools/echo-usb.exe"; Ad = "UsbTool.exe"; Klasor = "Echo" }
 
         @{ Url = "https://github.com/ItzIceHere/RedLotus-Mod-Analyzer/releases/download/RL/RedLotusModAnalyzer.exe"; Ad = "RedLotusModAnalyzer.exe"; Klasor = "RedLotus" }
         @{ Url = "https://github.com/ItzIceHere/RedLotus-Task-Sentinel/releases/download/RL/RedLotusTaskSentinel.exe"; Ad = "RedLotusTaskSentinel.exe"; Klasor = "RedLotus" }
